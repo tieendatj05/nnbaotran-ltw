@@ -1,14 +1,18 @@
-# Build WAR bằng Maven (Render sẽ tự chạy phần này)
+# ---- Build WAR ----
 FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /app
+WORKDIR /src
 COPY pom.xml .
-RUN mvn -B -q -DskipTests dependency:go-offline
 COPY src ./src
-RUN mvn -B -q -DskipTests package
+RUN mvn -DskipTests package
 
-# Chạy Tomcat 10 và deploy WAR làm ROOT
-FROM tomcat:10.1-jdk17-temurin
-RUN rm -rf /usr/local/tomcat/webapps/*
-COPY --from=build /app/target/*.war /usr/local/tomcat/webapps/ROOT.war
-EXPOSE 8080
-CMD ["catalina.sh", "run"]
+# ---- Run on Tomcat ----
+FROM tomcat:9.0-jdk17
+
+# Dùng server.xml tự quản (đã tắt shutdown, có placeholder __PORT__)
+COPY conf/server.xml $CATALINA_HOME/conf/server.xml
+
+# Deploy WAR thành ROOT
+COPY --from=build /src/target/*.war $CATALINA_HOME/webapps/ROOT.war
+
+# Thay __PORT__ = $PORT rồi chạy Tomcat
+CMD sh -c "sed -i 's/__PORT__/'\"${PORT}\"'/g' $CATALINA_HOME/conf/server.xml && catalina.sh run"
